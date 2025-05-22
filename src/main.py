@@ -215,6 +215,9 @@ def run_experiments(X_train, X_test, y_train, y_test,
         "activation":   ["relu", "tanh", "sigmoid", "tanh"],
         "batch_size":   [16, 32, 64, 128],
     }
+    
+    out_dir = Path("src/results")
+    out_dir.mkdir(exist_ok=True)
 
 		# Potrzebujemy jednego punktu odniesienia (baseline), od którego będziemy odchylać tylko jeden hiperparametr naraz
     # Ustalamy „baseline” – zawsze druga wartość z listy, potem zmieniamy 1 parametr naraz
