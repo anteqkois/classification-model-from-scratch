@@ -205,6 +205,18 @@ def accuracy(y_true: np.ndarray, y_pred_prob: np.ndarray, thr: float = 0.5):
     y_pred = (y_pred_prob >= thr).astype(int)
     return (y_pred == y_true).mean()
 
+#  INNE MIARY – precision, recall, f1
+def precision_recall_f1(y_true: np.ndarray, y_pred_prob: np.ndarray, thr=0.5):
+    y_pred = (y_pred_prob >= thr).astype(int)
+    tp = np.sum((y_pred == 1) & (y_true == 1))
+    fp = np.sum((y_pred == 1) & (y_true == 0))
+    fn = np.sum((y_pred == 0) & (y_true == 1))
+
+    prec = tp / (tp + fp + 1e-8)
+    rec  = tp / (tp + fn + 1e-8)
+    f1   = 2 * prec * rec / (prec + rec + 1e-8)
+    return prec, rec, f1
+
 #  GŁÓWNA PĘTLA – sprawdza ≥5 hiperparametrów
 def run_experiments(X_train, X_test, y_train, y_test,
                     repeats: int = 5, epochs: int = 50):
@@ -230,7 +242,7 @@ def run_experiments(X_train, X_test, y_train, y_test,
         rows = []
         for v in values:
             cfg = BASELINE.copy(); cfg[param] = v      # tutaj wprowadzamy jedną zmianę parametru naraz w każdej iteracji, tak jak było to wspomniane wyżej
-            tr_acc, te_acc = [], []
+            tr_acc, te_acc, prec_list, recall_list, f1_list = [], [], [], [], []
             # powtarzamy trenowanie, by uśrednić losowość
             for _ in range(repeats):
                 model = MLP(
@@ -243,12 +255,19 @@ def run_experiments(X_train, X_test, y_train, y_test,
                 model.fit(X_train, y_train, epochs=epochs, batch_size=cfg["batch_size"])
                 tr_acc.append(accuracy(y_train, model.predict_proba(X_train)))
                 te_acc.append(accuracy(y_test, model.predict_proba(X_test)))
+                p, r, f = precision_recall_f1(y_test, model.predict_proba(X_test))
+                prec_list.append(p)
+                recall_list.append(r)
+                f1_list.append(f)
             row = {
                 "value": v,
                 "train_mean": np.mean(tr_acc),
                 "train_best": np.max(tr_acc),
                 "test_mean": np.mean(te_acc),
                 "test_best": np.max(te_acc),
+                "prec_mean": np.mean(prec_list),
+                "rec_mean":  np.mean(recall_list),
+                "f1_mean":   np.mean(f1_list),
             }
             rows.append(row)
             print(f"  {param} = {v:<8} | test_mean = {row['test_mean']:.3f}")
@@ -311,7 +330,8 @@ def main():
         dur = perf_counter() - start
         train_acc = accuracy(y_train, model.predict_proba(X_train))
         test_acc = accuracy(y_test, model.predict_proba(X_test))
-        print(f"\nCzas uczenia: {dur:.1f} s | train_acc = {train_acc:.3f} | test_acc = {test_acc:.3f}")
+        prec, rec, f1 = precision_recall_f1(y_test, model.predict_proba(X_test))
+        print(f"\nCzas uczenia: {dur:.1f} s | train_acc = {train_acc:.3f} | test_acc={test_acc:.3f} | prec={prec:.3f} | rec={rec:.3f} | F1={f1:.3f}")
 
 if __name__ == "__main__":
     main()
