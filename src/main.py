@@ -283,7 +283,7 @@ def parse_args():
 # MAIN
 def main():
     args = parse_args()
-    print("\n▶ Wczytywanie danych…")
+    print("\nWczytywanie danych…")
     X, y = load_dataset(args.file, threshold=args.threshold)
     print(f"Dane: {X.shape[0]} próbek, {X.shape[1]} cech")
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=args.test_size)
