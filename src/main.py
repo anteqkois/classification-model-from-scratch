@@ -1,5 +1,6 @@
 #  Klasyfikator jakości wina (problem klasyfikacyjny)
 #  Sieć neuronowa stworzona całkowicie od zera”
+#  Sieć ocenia czy dane wino jest dobre czy nie, więc taka klasyfikacja zero/jedynkowa
 #  --------------------------------------------------------------------
 #  Nie używamy żadnych wysokopoziomowych bibliotek DL (TensorFlow, PyTorch).
 #   Cała logika sieci – warstwy, propagacja w przód i wstecz, optymalizacja,
@@ -11,7 +12,7 @@
 #   – osobny zapis wyników train/test do plików CSV.
 #  --------------------------------------------------------------------
 #  UŻYCIE (terminal):
-#     python3 main.py  --hidden_layers 2 --hidden_units 32 --activation relu --lr 0.01 --epochs 50
+#     python3 src/main.py --file src/data/wine-quality-red.csv --threshold 6 --test_size 0.2 --hidden_layers 2 --hidden_units 32 --activation relu --lr 0.01 --batch 32 --epochs 50 --experiments
 
 import argparse
 import csv
@@ -256,7 +257,7 @@ def run_experiments(X_train, X_test, y_train, y_test,
             writer = csv.DictWriter(f, fieldnames=rows[0].keys())
             writer.writeheader()
             writer.writerows(rows)
-        print(f"→ Zapisano wyniki param '{param}' do {csv_path}")
+        print(f"Zapisano wyniki dla  parametru '{param}' do {csv_path}")
 
 # ŁADOWANIE DANYCH
 def load_dataset(path: str, threshold: int = 6):
@@ -286,17 +287,17 @@ def parse_args():
 # MAIN
 def main():
     args = parse_args()
-    print("\nWczytywanie danych…")
+    print("\nWczytywanie danych")
     X, y = load_dataset(args.file, threshold=args.threshold)
     print(f"Dane: {X.shape[0]} próbek, {X.shape[1]} cech")
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=args.test_size)
     X_train, X_test = standard_scale(X_train, X_test)
-    print(f"Train: {len(X_train)} | Test: {len(X_test)}")
+    print(f"Podział danych: Treningowe: {len(X_train)} | Testowe: {len(X_test)}")
 
     if args.experiments:
         start = perf_counter()
         run_experiments(X_train, X_test, y_train, y_test, repeats=5, epochs=args.epochs)
-        print(f"Cała siatka eksperymentów zajęła {perf_counter()-start:.1f} s")
+        print(f"Cały proces eksperymentów zajął {perf_counter()-start:.1f} sekund")
     else:
         model = MLP(
             input_dim=X_train.shape[1],
