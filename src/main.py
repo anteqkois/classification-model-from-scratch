@@ -11,10 +11,12 @@
 #   – osobny zapis wyników train/test do plików CSV.
 #  --------------------------------------------------------------------
 #  UŻYCIE (terminal):
-#     python main.py  --hidden_layers 2 --hidden_units 32 --activation relu --lr 0.01 --epochs 50
+#     python3 main.py  --hidden_layers 2 --hidden_units 32 --activation relu --lr 0.01 --epochs 50
 
 import argparse
+import csv
 import math
+from pathlib import Path
 from time import perf_counter
 
 import numpy as np
@@ -31,9 +33,9 @@ def train_test_split(X: np.ndarray, y: np.ndarray, test_size: float = 0.2, seed:
 
 def standard_scale(X_train: np.ndarray, X_test: np.ndarray):
 		"""Standaryzacja cech metodą Z‑score – średnia i odchylenie liczone tylko z próbek należących do zbioru uczącego, czyli X_train."""
-    mean = X_train.mean(axis=0)
-    std = X_train.std(axis=0) + 1e-8       # dodajemy małą stałą, by uniknąć dzielenia przez 0
-    return (X_train - mean) / std, (X_test - mean) / std
+		mean = X_train.mean(axis=0)
+		std = X_train.std(axis=0) + 1e-8       # dodajemy małą stałą, by uniknąć dzielenia przez 0
+		return (X_train - mean) / std, (X_test - mean) / std
 
 #  FUNKCJE AKTYWACJI + pochodne (potrzebne w backprop)
 def relu(x: np.ndarray) -> np.ndarray:
@@ -214,8 +216,8 @@ def run_experiments(X_train, X_test, y_train, y_test,
         "batch_size":   [16, 32, 64, 128],
     }
 
-    # Ustalamy „baseline” – zawsze druga wartość z listy, potem zmieniamy 1 parametr naraz
 		# Potrzebujemy jednego punktu odniesienia (baseline), od którego będziemy odchylać tylko jeden hiperparametr naraz
+    # Ustalamy „baseline” – zawsze druga wartość z listy, potem zmieniamy 1 parametr naraz
 		# PARAM_GRID.items() zwraca pary (nazwa_parametru, lista_wartości), gdzie k to nazwa parametru (np. 'num_layers'), a v[1] to drugi element listy wartości (indeks 1).
 		# Dzięki temu baseline nie leży na żadnym z krańców skali, co ułatwia późniejsze porównania.
     BASELINE = {k: v[1] for k, v in PARAM_GRID.items()}
@@ -223,18 +225,89 @@ def run_experiments(X_train, X_test, y_train, y_test,
     for param, values in PARAM_GRID.items():
         rows = []
         for v in values:
-            cfg = BASELINE.copy(); cfg[param] = v      # jedyna różnica parametrów w danej iteracji
+            cfg = BASELINE.copy(); cfg[param] = v      # tutaj wprowadzamy jedną zmianę parametru naraz w każdej iteracji, tak jak było to wspomniane wyżej
             tr_acc, te_acc = [], []
             # powtarzamy trenowanie, by uśrednić losowość
             for _ in range(repeats):
                 model = MLP(
-                    input_dim = X_train.shape[1],
-                    num_layers = cfg["num_layers"],
-                    num_neurons = cfg["num_neurons"],
-                    activation = cfg["activation"],
-                    learning_rate = cfg["learning_rate"],
+                    input_dim=X_train.shape[1],
+                    num_layers=cfg["num_layers"],
+                    num_neurons=cfg["num_neurons"],
+                    activation=cfg["activation"],
+                    learning_rate=cfg["learning_rate"],
                 )
-                model.fit(X_train, y_train,
-                          epochs = epochs,
-                          batch_size = cfg["batch_size"])
-                tr_acc.append(accuracy(y_train, model.predict_proba
+                model.fit(X_train, y_train, epochs=epochs, batch_size=cfg["batch_size"])
+                tr_acc.append(accuracy(y_train, model.predict_proba(X_train)))
+                te_acc.append(accuracy(y_test, model.predict_proba(X_test)))
+            row = {
+                "value": v,
+                "train_mean": np.mean(tr_acc),
+                "train_best": np.max(tr_acc),
+                "test_mean": np.mean(te_acc),
+                "test_best": np.max(te_acc),
+            }
+            rows.append(row)
+            print(f"  {param} = {v:<8} | test_mean = {row['test_mean']:.3f}")
+        csv_path = out_dir / f"results_{param}.csv"
+        with csv_path.open("w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=rows[0].keys())
+            writer.writeheader()
+            writer.writerows(rows)
+        print(f"→ Zapisano wyniki param '{param}' do {csv_path}")
+
+# ŁADOWANIE DANYCH
+def load_dataset(path: str, threshold: int = 6):
+    """Wczytujemy plik CSV oraz binaryzujemy etykietę quality ≥ threshold, tak żeby mieć potem 0/1 zmienną."""
+    df = pd.read_csv(path, sep=",")
+    df = pd.get_dummies(df, columns=["type"], drop_first=True) # przekształcamy także zmienną 'type'
+    X = df.drop(columns=["quality"]).values.astype(np.float32)
+    y = (df["quality"] >= threshold).astype(int).values.reshape(-1, 1)
+    return X, y
+
+# PARSER ARGUMENTÓW
+def parse_args():
+    p = argparse.ArgumentParser()
+    p.add_argument("--file", required=True, help="Ścieżka do pliku CSV z danymi")
+    p.add_argument("--threshold", type=int, default=6, help="Próg jakości dla klasy 1")
+    p.add_argument("--test_size", type=float, default=0.2, help="Ułamek danych testowych")
+    # hiperparametry
+    p.add_argument("--hidden_layers", type=int, default=2)
+    p.add_argument("--hidden_units", type=int, default=32)
+    p.add_argument("--activation", choices=list(ACTIVATIONS.keys()), default="relu")
+    p.add_argument("--lr", type=float, default=0.01)
+    p.add_argument("--batch", type=int, default=32)
+    p.add_argument("--epochs", type=int, default=50)
+    p.add_argument("--experiments", action="store_true", help="Uruchom siatkę eksperymentów")
+    return p.parse_args()
+
+# MAIN
+def main():
+    args = parse_args()
+    print("\n▶ Wczytywanie danych…")
+    X, y = load_dataset(args.file, threshold=args.threshold)
+    print(f"Dane: {X.shape[0]} próbek, {X.shape[1]} cech")
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=args.test_size)
+    X_train, X_test = standard_scale(X_train, X_test)
+    print(f"Train: {len(X_train)} | Test: {len(X_test)}")
+
+    if args.experiments:
+        start = perf_counter()
+        run_experiments(X_train, X_test, y_train, y_test, repeats=5, epochs=args.epochs)
+        print(f"Cała siatka eksperymentów zajęła {perf_counter()-start:.1f} s")
+    else:
+        model = MLP(
+            input_dim=X_train.shape[1],
+            num_layers=args.hidden_layers,
+            num_neurons=args.hidden_units,
+            activation=args.activation,
+            learning_rate=args.lr,
+        )
+        start = perf_counter()
+        model.fit(X_train, y_train, epochs=args.epochs, batch_size=args.batch)
+        dur = perf_counter() - start
+        train_acc = accuracy(y_train, model.predict_proba(X_train))
+        test_acc = accuracy(y_test, model.predict_proba(X_test))
+        print(f"\nCzas uczenia: {dur:.1f} s | train_acc = {train_acc:.3f} | test_acc = {test_acc:.3f}")
+
+if __name__ == "__main__":
+    main()
