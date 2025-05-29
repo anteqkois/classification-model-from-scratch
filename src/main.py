@@ -225,7 +225,7 @@ def run_experiments(X_train, X_test, y_train, y_test,
         "num_layers":   [1, 2, 3, 4],            # liczba warstw ukrytych
         "num_neurons":  [8, 16, 32, 64],         # neurony w warstwie
         "learning_rate": [0.1, 0.05, 0.01, 0.005],
-        "activation":   ["relu", "tanh", "sigmoid", "tanh"],
+        "activation":   ["relu", "tanh", "sigmoid"],
         "batch_size":   [16, 32, 64, 128],
     }
     
