@@ -1,18 +1,5 @@
-#  Klasyfikator jakości wina (problem klasyfikacyjny)
-#  Sieć neuronowa stworzona całkowicie od zera”
-#  Sieć ocenia czy dane wino jest dobre czy nie, więc taka klasyfikacja zero/jedynkowa
-#  --------------------------------------------------------------------
-#  Nie używamy żadnych wysokopoziomowych bibliotek DL (TensorFlow, PyTorch).
-#   Cała logika sieci – warstwy, propagacja w przód i wstecz, optymalizacja,
-#   są napisana ręcznie.
-#  Wbudowaliśmy pętlę spełniająca wymagania projektu:
-#   – co najmniej 5 hiperparametrów,
-#   – dla każdego ≥ 4 wartości,
-#   – każdy zestaw trenowany ≥ 5 razy,
-#   – osobny zapis wyników train/test do plików CSV.
-#  --------------------------------------------------------------------
 #  UŻYCIE (terminal):
-#     python3 src/main.py --file src/data/wine-quality-red.csv --threshold 6 --test_size 0.2 --hidden_layers 2 --hidden_units 32 --activation relu --lr 0.01 --batch 32 --epochs 50 --experiments
+#  python3 src/main.py --file src/data/wine-quality-red.csv --threshold 6 --test_size 0.2 --hidden_layers 2 --hidden_units 32 --activation relu --lr 0.01 --batch 32 --epochs 50 --experiments
 
 import argparse
 import csv
@@ -244,30 +231,57 @@ class MLP:
     przetwarzać cały X_train naraz, model dzieli dane na mini-batche. Taki podział przyśpiesza i stablizuje uczenie.
     """
     def fit(self, X_train, y_train, epochs: int, batch_size: int):
-        n = len(X_train)
+        n = len(X_train) # liczba próbek treningowych
+
+        """
+        Mieszanie kolejności próbek treningowych na początku każdej epoki uczenia,
+        Gdy dane są posortowane (np. rosnąca wartość pH), sieć widzi w pierwszych krokach wyłącznie niski zakres cech. 
+        To wprowadza stronniczość w początkowych aktualizacjach gradientu. Dzięki mieszaniu sieć nie może „nauczyć się” 
+        sekwencji próbek, bo w każdym przejściu dostaje je w innej kolejności.
+        """
         for _ in range(epochs):
-						# Tasowanie (mieszanie) kolejności próbek treningowych na początku każdej epoki uczenia
-						# Gdy dane są posortowane (np. rosnąca wartość pH), sieć widzi w pierwszych krokach wyłącznie niski zakres cech. To wprowadza stronniczość w początkowych aktualizacjach gradientu.
-						# Sieć nie może „nauczyć się” sekwencji próbek, bo w każdym przejściu dostaje je w innej kolejności.
             idx = np.random.permutation(n)
             X_train, y_train = X_train[idx], y_train[idx]
-            # iteracja używając batchy
+
+            # Tworzenie mini-batchów
             for start in range(0, n, batch_size):
                 end = start + batch_size
                 Xb, yb = X_train[start:end], y_train[start:end]
+
+                #Dla każdego mini-batcha wykonuje się przejście w przód, przejście wstecz i aktualizacja wag
                 y_hat = self.forward(Xb)
                 self.backward(y_hat, yb)
 
-    # inferencja: prawdopodobieństwa
+    """
+    Zwraca przewidywane prawdopodobieństwo klasy 1 dla podanych danych X.
+    """
     def predict_proba(self, X: np.ndarray):
         return self.forward(X)
 
-#  MIARA SKUTECZNOŚCI – accuracy
-def accuracy(y_true: np.ndarray, y_pred_prob: np.ndarray, thr: float = 0.5):
-    y_pred = (y_pred_prob >= thr).astype(int)
-    return (y_pred == y_true).mean()
+            ####  MIARY OCENY KLASYFIKATORA ###
 
-#  INNE MIARY – precision, recall, f1
+"""
+Accuracy (dokładność) - sprawdza jaki procent przewidywań był poprawny. (np. 0.95 = model zgaduje dobrze w 95% przypadków)
+
+y_true: prawdziwe etykiety klasy (dane referencyjne, znane odpowiedzi)
+y_pred_prob: przewidywane prawdopodobieństwo, wychodzi z funkcji sigmoid
+thr: próg decyzyjny, jakiego minimalnego prawdopodobieństwa trzeba, by uznać, że to klasa 1
+"""
+def accuracy(y_true: np.ndarray, y_pred_prob: np.ndarray, thr: float = 0.5):
+    y_pred = (y_pred_prob >= thr).astype(int) #progowane prawodopobieństwa thr = 0.5 oraz zamiana True/False na 1/0
+    return (y_pred == y_true).mean() #sprawdza ile predykcji było poprawnych i zwraca średnią = procent trafień
+
+"""
+Precision (precyzja) - ile z zaklasyfikowanych jako "1" było faktycznie "1", czyli jak często model ma rację. 
+Oczekujemy wysokiej wartości oznaczającej mało fałszywych alarmów.
+
+Recall (czułość) - ile z prawdziwych "1" udało się wykryć i określić jako "1".
+Wysoka wartość oznacza, że sieć rzadko pomija rzeczy, które powinna wykryć
+
+F1 - średnia harmoniczna precision i recall, przydatne gdy dane są niezbalansowane (np. 90% klas 0, 10% klas 1)
+Wysokie F1 to dobry kompromis, model nie strzela na ślepo i niczego nie pomija.
+"""
+
 def precision_recall_f1(y_true: np.ndarray, y_pred_prob: np.ndarray, thr=0.5):
     y_pred = (y_pred_prob >= thr).astype(int)
     tp = np.sum((y_pred == 1) & (y_true == 1))
@@ -279,29 +293,39 @@ def precision_recall_f1(y_true: np.ndarray, y_pred_prob: np.ndarray, thr=0.5):
     f1   = 2 * prec * rec / (prec + rec + 1e-8)
     return prec, rec, f1
 
-#  GŁÓWNA PĘTLA – sprawdza ≥5 hiperparametrów
+            ###  GŁÓWNA PĘTLA ###
+"""
+repeats: liczba powtórzeń treningu dla jednego zestawu hiperparametrów
+"""
 def run_experiments(X_train, X_test, y_train, y_test,
                     repeats: int = 5, epochs: int = 50):
-    """Przeprowadzaamy systematyczne testy hiperparametrów i zapisujemy wyniki."""
+
+    #Słownik, zawierający listy możliwych wartości dla każedgo hiperparametru
     PARAM_GRID = {
-        "num_layers":   [1, 2, 3, 4],            # liczba warstw ukrytych
-        "num_neurons":  [8, 16, 32, 64],         # neurony w warstwie
-        "learning_rate": [0.1, 0.05, 0.01, 0.005], #zmiana wag
-        "activation":   ["relu", "tanh", "sigmoid"], #funkcje aktywacji
-        "batch_size":   [16, 32, 64, 128], #liczba próbek danych
+        "num_layers":   [1, 2, 3, 4],
+        "num_neurons":  [8, 16, 32, 64],
+        "learning_rate": [0.1, 0.05, 0.01, 0.005],
+        "activation":   ["relu", "tanh", "sigmoid"],
+        "batch_size":   [16, 32, 64, 128],
     }
-    
+
+    # Stworzenie folderu na wyniki, jeśli takowy istnieje to nie tworzony jest nowy
     out_dir = Path("src/results")
     out_dir.mkdir(exist_ok=True)
 
-		# Potrzebujemy jednego punktu odniesienia (baseline), od którego będziemy odchylać tylko jeden hiperparametr naraz
-    # Ustalamy „baseline” – zawsze druga wartość z listy, potem zmieniamy 1 parametr naraz
-		# PARAM_GRID.items() zwraca pary (nazwa_parametru, lista_wartości), gdzie k to nazwa parametru (np. 'num_layers'), a v[1] to drugi element listy wartości (indeks 1).
-		# Dzięki temu baseline nie leży na żadnym z krańców skali, co ułatwia późniejsze porównania.
+    """
+    Potrzebujemy jednego punktu odniesienia (baseline), od którego będziemy odchylać tylko jeden hiperparametr naraz.
+    Ustalamy „baseline” – zawsze druga wartość z listy v[1], potem zmieniamy 1 parametr naraz.
+	PARAM_GRID.items() zwraca pary (nazwa_parametru, lista_wartości), gdzie k to nazwa parametru (np. 'num_layers'), a v[1] to drugi element listy wartości (indeks 1).
+	Dzięki temu baseline nie leży na żadnym z krańców skali, co ułatwia późniejsze porównania.
+    """
     BASELINE = {k: v[1] for k, v in PARAM_GRID.items()}
 
+    # Pętla po wszystkich nazwach hiperparametrów (param) i odpowiadających im listach wartości (values)
     for param, values in PARAM_GRID.items():
-        rows = []
+        rows = [] # pusta lista, gdzie będą trafiać wyniki dla każdej wartości danego parametru
+
+        # Pętla po każej wartości v danegi hiperametru param
         for v in values:
             cfg = BASELINE.copy(); cfg[param] = v      # tutaj wprowadzamy jedną zmianę parametru naraz w każdej iteracji, tak jak było to wspomniane wyżej
             tr_acc, te_acc, prec_list, recall_list, f1_list = [], [], [], [], []
@@ -340,7 +364,7 @@ def run_experiments(X_train, X_test, y_train, y_test,
             writer.writerows(rows)
         print(f"Zapisano wyniki dla  parametru '{param}' do {csv_path}")
 
-# ŁADOWANIE DANYCH
+            ### ŁADOWANIE DANYCH ###
 def load_dataset(path: str, threshold: int = 6):
     """Wczytujemy plik CSV oraz binaryzujemy etykietę quality ≥ threshold, tak żeby mieć potem 0/1 zmienną."""
     df = pd.read_csv(path, sep=",")
