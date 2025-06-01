@@ -14,7 +14,7 @@
 #  UŻYCIE (terminal):
 #     python3 src/main.py --file src/data/wine-quality-red.csv --threshold 6 --test_size 0.2 --hidden_layers 2 --hidden_units 32 --activation relu --lr 0.01 --batch 32 --epochs 50 --experiments
 
-import argparse
+import argparsedd
 import csv
 import math
 from pathlib import Path
@@ -224,9 +224,9 @@ def run_experiments(X_train, X_test, y_train, y_test,
     PARAM_GRID = {
         "num_layers":   [1, 2, 3, 4],            # liczba warstw ukrytych
         "num_neurons":  [8, 16, 32, 64],         # neurony w warstwie
-        "learning_rate": [0.1, 0.05, 0.01, 0.005],
-        "activation":   ["relu", "tanh", "sigmoid"],
-        "batch_size":   [16, 32, 64, 128],
+        "learning_rate": [0.1, 0.05, 0.01, 0.005], #zmiana wag
+        "activation":   ["relu", "tanh", "sigmoid"], #funkcje aktywacji
+        "batch_size":   [16, 32, 64, 128], #liczba próbek danych
     }
     
     out_dir = Path("src/results")
