@@ -14,7 +14,7 @@
 #  UŻYCIE (terminal):
 #     python3 src/main.py --file src/data/wine-quality-red.csv --threshold 6 --test_size 0.2 --hidden_layers 2 --hidden_units 32 --activation relu --lr 0.01 --batch 32 --epochs 50 --experiments
 
-import argparsedd
+import argparse
 import csv
 import math
 from pathlib import Path
@@ -23,68 +23,85 @@ from time import perf_counter
 import numpy as np
 import pandas as pd
 
-#  FUNKCJE POMOCNICZE: podział danych i standaryzacja
-def train_test_split(X: np.ndarray, y: np.ndarray, test_size: float = 0.2, seed: int = 42):
-    """Losowy podział na zbiory uczący i testowy."""
-    rng = np.random.default_rng(seed)
-    idx = rng.permutation(len(X))          # losowa permutacja indeksów
-    split = int(len(X) * (1 - test_size))  # miejsce gdzie dane mają być podzielone na 2 części
-    return X[idx[:split]], X[idx[split:]], y[idx[:split]], y[idx[split:]]
+            ### FUNKCJE POMOCNICZNE ###
+"""
+train_test_split() - realizuje losowy podział na zbiór treningowy i testowy, działa podobnie do funkcji train_test_split() z biblioteki sklearn
+X: dane wejściowe
+y: etykiety (wartości docelowe 0 lub 1)
+test_size: proporcja danych przeznaczonych do testu
+seed: ziarno generatora liczb losowych
+"""
 
+def train_test_split(X: np.ndarray, y: np.ndarray, test_size: float = 0.2, seed: int = 42):
+    rng = np.random.default_rng(seed)
+    idx = rng.permutation(len(X)) # losowa permutacja indeksów - miesza dane losowo
+    split = int(len(X) * (1 - test_size)) # miejsce gdzie dane mają być podzielone na 2 części
+    return X[idx[:split]], X[idx[split:]], y[idx[:split]], y[idx[split:]] # zwraca 4 tablice X_train, X_test, y_train, y_test
+
+"""
+standard_scale() - wykonuje standaryzację cech (kolumn) metodą Z‑score, czyli przekształca dane tak, aby każda cecha miała:
+	•	średnią (mean) = 0
+	•	odchylenie standardowe (std) = 1
+Wykonujemy ją tylko na zbiorze uczącym tak aby model nie uczył się na informacjach, których jeszcze nie zna. 
+Standaryzacja jest potrzebna aby cechy były porównywalne (cechy o większych wartościach mogłby dominować nad innymi).
+"""
 
 def standard_scale(X_train: np.ndarray, X_test: np.ndarray):
-		"""Standaryzacja cech metodą Z‑score – średnia i odchylenie liczone tylko z próbek należących do zbioru uczącego, czyli X_train."""
-		mean = X_train.mean(axis=0)
-		std = X_train.std(axis=0) + 1e-8       # dodajemy małą stałą, by uniknąć dzielenia przez 0
-		return (X_train - mean) / std, (X_test - mean) / std
+        mean = X_train.mean(axis=0) #obliczana jest średnia wartość dla każdej cechy (kolumny) osobno
+        std = X_train.std(axis=0) + 1e-8 #obliczane jest odchylenie standardowe również dla każdej cechy osobny ale dodajemy małą stałą, by uniknąć dzielenia przez 0 (gdy cecha ma stałą wartość)
+        return (X_train - mean) / std, (X_test - mean) / std #liczony jest Z-score
 
-#  FUNKCJE AKTYWACJI + pochodne (potrzebne w backprop)
+            ### FUNKCJE AKTYWACJI ###
+"""
+ReLU (Rectified Linear Unit) - zwraca x, gdy x > 0, w przeciwnym razie 0.
+Wprowadza nieliniowość, co umożliwia sieci rozpoznawać złożone wzorce. Jest prosta i szybka do obliczenia.
+Pomaga unikać problemu zanikania gradientów, w przeciwieństwie np. do sigmoidy. Działa dobrze w praktyce, szczególnie w głębszych sieciach.
+Wadą jest problem martwych neuronów, gdy x jest mniejsze od 0 gradient = 0.
+
+Problem zanikania gradientów pojawia się właśnie w głębokich sieciach neuronowych (z wieloma warstwami), podczas propogacji wstecznej, gdyż pochodne są mnożone wzdłuż warstw. 
+Jeśli używamy funkcji aktywacji, które mają pochodne bliskie 0 (np. sigmoid czy tanh w skrajnych wartościach ok. 3), to możemy zauważyć taką zależność:
+Im głębiej w sieci -> tym mniejsze gradienty -> gradienty zanikają -> wagi nie uczą się.
+Efektem jest, że wczesne warstwy uczą się bardzo wolno, albo w ogóle, a wtedy sieć się nie poprawia.
+"""
+
 def relu(x: np.ndarray) -> np.ndarray:
-    """ReLU (Rectified Linear Unit)
-    Zwraca x, gdy x > 0, w przeciwnym razie 0.
-    Wprowadza nieliniowość bez górnego ograniczenia.
-    Przyspiesza zbieżność i łagodzi problem zanikania gradientów w głębszych sieciach.
-    """
     return np.maximum(0, x)
 
+"""
+Pochodna ReLU - wynosi 1 tam, gdzie x > 0, w przeciwnym razie 0.
+Potrzebna podczas wstecznej propagacji (backpropagation - sieć uczy się na podstawie błędu loss, czyli różnicy między predykcją a etykietą 
+i zmienia swoje wagi aby poprawić wynik) w procesie treningu. Pochodna mówi, w którą stronę i jak mocno zmieniać wagę, żeby zmiejszyć błąd sieci.
+Jeśli pochodna ~ 1, to zmiana jest duzą i nauka jest szybka, jednak gdy ~0 uczenie staje i mamy doczynienia z zanikaniem gradientów. 
+Dzięki pochodnej ReLU wynoszącej 1 gradienty nie maleją.
+"""
 
 def relu_deriv(x: np.ndarray) -> np.ndarray:
-    """Pochodna ReLU.
-    Gradient wynosi 1 tam, gdzie x > 0, i 0 w pozostałych miejscach.
-    Dzięki temu obliczenie jest bardzo szybkie.
-    """
     return (x > 0).astype(x.dtype)
 
+"""
+Tanh (skalowana hiperboliczna tangens) -  przyjmuje wartości od (-1,1).
+Symetryczna wokół zera – pomaga, gdy dane wejściowe są również znormalizowane do zera (czyli po Z-score standaryzacji).
+Jendak tanh cierpi na problem zanikających gradientów, w szczególności dla dużych |x|. 
+Dobrze sprawdzi się w sieciach z małą liczbą warstw.
+"""
 
 def tanh(x: np.ndarray) -> np.ndarray:
-    """Tanh (skalowana hiperboliczna tangens).
-    Przyjmuje wartości w przedziale (‑1, 1).
-    Symetryczna wokół zera – pomaga, gdy dane wejściowe są również znormalizowane do zera.
-    """
     return np.tanh(x)
 
 
 def tanh_deriv(x: np.ndarray) -> np.ndarray:
-    """Pochodna funkcji tanh.
-    Wzór analityczny: 1 ‑ tanh(x)^2.
-    Maksymalny gradient ≈ 1 (w okolicy 0), maleje im |x| większe.
-    """
     return 1 - np.tanh(x) ** 2
 
-
+"""
+Sigmoid - mapuje liczby rzeczywiste na zakres (0, 1)
+Idealna na warstwę wyjściową binarnej klasyfikacji, którą my tu zastosowaliśmy.
+Charakteryzuje się „spłaszczonymi” końcami, co przy dużych |x| może powodować zanik gradientu (dlatego w ukrytych warstwach częściej używa się ReLU/tanh).
+"""
 def sigmoid(x: np.ndarray) -> np.ndarray:
-    """Sigmoid (funkcja logistyczna).
-    Mapuje liczby rzeczywiste na zakres (0, 1) – idealna na warstwę wyjściową binarnej klasyfikacji, którą my tu zastosowaliśmy.
-    Charakteryzuje się „spłaszczonymi” końcami, co przy dużych |x| może powodować zanik gradientu (dlatego w ukrytych warstwach częściej używa się ReLU/tanh).
-    """
     return 1 / (1 + np.exp(-x))
 
 
 def sigmoid_deriv(x: np.ndarray) -> np.ndarray:
-    """Pochodna sigmoidu.
-    Najwygodniej wykorzystać fakt, że s'(x) = s(x)·(1 ‑ s(x)), gdzie s(x) to sam sigmoid.
-		Dzięki temu nie liczymy ponownie exp(), co przyspiesza działanie sieci.
-    """
     s = sigmoid(x)
     return s * (1 - s)
 
@@ -95,92 +112,137 @@ ACTIVATIONS = {
     "sigmoid": (sigmoid, sigmoid_deriv),
 }
 
-#  DEFINICJA WARSTWY GĘSTEJ (w pełni połączonej)
+            ### DEFINICJA WARSTWY GĘSTEJ ###
 class DenseLayer:
-    """Najprostsza warstwa Dense: z = a_prev · W + b, potem funkcja aktywacji."""
+    """Inicjalizacja - budowa warstwy (wymyślenie wag, ustawianie biasów oraz funkcji aktywacji).
+    input_size: ile neuronów ma wejście
+    output_size: ile neuronów będzie miała ta warstwa
+    activation: jaką funkcje aktywacji wybierzemy
+    """
+
     def __init__(self, input_size: int, output_size: int, activation: str):
-        # Inicjalizacja wag z równomiernego rozkładu (±1/√n) – wystarczająca dla MLP.
-        limit = 1 / math.sqrt(input_size)
+        limit = 1 / math.sqrt(input_size) # limit dla losoanie wag, żeby zapobiegać zanikaniu gradientów
         rng = np.random.default_rng()
-        self.W = rng.uniform(-limit, limit, (input_size, output_size))
-        self.b = np.zeros((1, output_size))
-        self.act, self.act_grad = ACTIVATIONS[activation]
-        # cache na potrzeby backprop, by warstwa działała szybciej
+        self.W = rng.uniform(-limit, limit, (input_size, output_size)) # wagi W to macierz input_size * output_size, inicjalizowana z zakresu [-limit, imit]
+        self.b = np.zeros((1, output_size)) # biasy "b" wektory długości output_size
+        self.act, self.act_grad = ACTIVATIONS[activation] # pobranie funkcji aktywacji oraz jej pochodnej ze słownika ACTIVATIONS
+
+        # Zmienna z oraz a_prev są zapamiętywane (cacheowane)
         self.z: np.ndarray | None = None
         self.a_prev: np.ndarray | None = None
 
-    # propagacja w przód - sieć liczy wyjście z danych wejściowych
-    def forward(self, a_prev: np.ndarray):
-        self.a_prev = a_prev               # zapamiętujemy wejście do gradientów
-        self.z = a_prev @ self.W + self.b  # iloczyn + bias
-        return self.act(self.z)            # aktywacja nieliniowa
+    """
+    Forward - propagacja w przód.
+    a_prev: dane wejściowe do warstwy (np. dane treningowe)
+    """
 
-    # propagacja wstecz - wsteczne obliczanie gradientów
+    def forward(self, a_prev: np.ndarray):
+        self.a_prev = a_prev               # zapamiętujemy wejście bo przyda się w backpropagation
+        self.z = a_prev @ self.W + self.b  # mnożenie macierzy a_prev * W + bias
+        return self.act(self.z)            # zwracamy wynik funkcji aktywacji - wyjście wartstwy
+
+    """
+    Backward - propagacja wstecz, poprawianie błędów - uczenie się. Sprawdzamy jak bardzo
+    każde wejście i każda waga przyczyniła się do błedu. Liczymy jak zmienić wagi i biasy, 
+    żeby następnym razem było lepiej
+    dA: gradient błędu względem aktywacji wyjściowej tej warstwy
+    """
+
     def backward(self, dA: np.ndarray):
-        # dA – gradient błędu względem aktywacji wyjściowej tej warstwy
-        dz = dA * self.act_grad(self.z)    # łańcuch: dL/dz = dL/dA * dA/dz
-        # gradienty wag i biasu – uśredniamy po batchu
-        dW = self.a_prev.T @ dz / len(dz)
-        db = dz.mean(axis=0, keepdims=True)
-        # gradient przekazywany do poprzedniej warstwy
-        dA_prev = dz @ self.W.T
+        dz = dA * self.act_grad(self.z)    # łańcuch pochodnych: dL/dz = dL/dA * dA/dz, jak bardzo wynik z tej wartswy był winny błędu
+        dW = self.a_prev.T @ dz / len(dz) # gradient wag, mnożenie transponowanego wejśia przez uśrednione po długości dz
+        db = dz.mean(axis=0, keepdims=True) # gradient biasu, to średnia z dz
+        dA_prev = dz @ self.W.T # gradient względem wejścia a_prev, przekazywany do poprzedniej warstwy (jeśli jest)
         return dA_prev, dW, db
 
-#  STRUKTURA CAŁEJ SIECI (MLP: kilka warst Dense + 1 neuron wyjściowy)
+            ### STRUKTURA CAŁEJ SIECI ###
 class MLP:
-    """Prosty wielowarstwowy perceptron do binarnej klasyfikacji."""
+    """
+    To jest prosty model sieci neuronowej (MLP - Multilayer Perceptron) do binarnej klasyfikacji (kilka warst Dense + 1 neuron wyjściowy).
+    Oznacza to, że uczy się przewidywać, czy coś należy do jednej z dwóch klas, w tym przypadku “0” czy “1”.
+    input_dim: liczba cech wejściowych
+	num_layers: ile warstw ukrytych (czyli „neuronów pośrednich”) będzie między wejściem a wyjściem.
+	num_neurons: ile neuronów ma każda ukryta warstwa.
+	activation: funkcja aktywacji
+	learning_rate: tempo uczenia (krok aktualizacji wagi)
+    """
     def __init__(self, input_dim: int, num_layers: int, num_neurons: int,
                  activation: str, learning_rate: float):
-        self.layers: list[DenseLayer] = []
-        dim_prev = input_dim
-        # tworzymy ukryte warstwy
+        self.layers: list[DenseLayer] = [] # tworzymy pustą listę wartsw ukrytych
+        dim_prev = input_dim # zmienna pomocnicza - aktualna liczba wejść do danej warstwy (na początku równa input_dim)
+
+        # Tworzymy warstwę typu DenseLayer o odpowiednich wymiarach i aktywacji.
+        # Aktualizujemy dim_prev, ponieważ następna warstwa dostanie na wejściu num_neurons neuronów z poprzedniej.
         for _ in range(num_layers):
             self.layers.append(DenseLayer(dim_prev, num_neurons, activation))
             dim_prev = num_neurons
-        # pojedynczy neuron wyjściowy + sigmoid
-        limit = 1 / math.sqrt(dim_prev)
+        # Pojedynczy neuron wyjściowy + sigmoid
+        limit = 1 / math.sqrt(dim_prev) # limit dla inicjalizacji wag wyjściowych (zapobiega zbyt dużym wartościom)
         rng = np.random.default_rng()
-        self.out_W = rng.uniform(-limit, limit, (dim_prev, 1))
-        self.out_b = np.zeros((1, 1))
+        self.out_W = rng.uniform(-limit, limit, (dim_prev, 1)) # wagi warstwy wyjściowej z zakresu (-limit, limit), rozmiar: (liczba neuronów ostaniej warstwy, 1)
+        self.out_b = np.zeros((1, 1)) # bias warstwy wyjściowej jako zero
         self.lr = learning_rate
 
-    # propagacja w przód przez całą sieć
+    """
+    Funkcja wykonująca przejście sygnału przez całą sięc dla danych wejściowych X.
+    """
     def forward(self, X: np.ndarray):
-        a = X
+        a = X # aktualna aktywacja, początkowa równa wejściu X
+
+        # Dla każdej warstwy ukrytej wykonujemy propagację w przód, aktualizając a
         for layer in self.layers:
             a = layer.forward(a)
-        z = a @ self.out_W + self.out_b
-        y_hat = sigmoid(z)                # prawdopodobieństwo klasy „1”
-        self._cache = (a, z)              # zachowujemy w cache, by policzyć gradienty wyjścia
-        return y_hat
+        z = a @ self.out_W + self.out_b # liczona jest kombinacja aktywacji ostatniej warstwy z wagami wyjściowymi + bias
+        y_hat = sigmoid(z) # sigmoida daje prawdopodobieństwo klasy "1"
+        self._cache = (a, z) # zachowujemy w cache, by policzyć backward
+        return y_hat # zwracamy przewidziane prawdopodobieństwo klasy "1"
 
-    # funkcja kosztu (binary CE)
+    """
+    Loss function - jej celem jest zmierzenie, jak bardzo przewidywania sieci różnią się od prawdziwych odpowiedzi.
+    """
     def compute_loss(self, y_hat: np.ndarray, y_true: np.ndarray):
-        eps = 1e-8                        # zapobiega log(0)
-        return -np.mean(y_true * np.log(y_hat + eps) +
-                        (1 - y_true) * np.log(1 - y_hat + eps))
+        eps = 1e-8                        # zapobiega log(0) oraz dzieleniu przez 0
 
-    # propagacja wstecz
+        # Obliczana jest średnia wartość binary cross-entropy - standardowa funkcja kosztu dla klasyfikacji binarnej
+        return -np.mean(y_true * np.log(y_hat + eps) + (1 - y_true) * np.log(1 - y_hat + eps))
+
+    """
+    Funkcja propoagacji wstecznej wywoływana w celu obliczenia gradientów i aktualizacji wag.
+    """
     def backward(self, y_hat: np.ndarray, y_true: np.ndarray):
-        # gradient na wyjściu: dL/dz = (y_hat – y_true)/N  (wyprowadzony z BCE)
-        a_last, _ = self._cache
-        dz_last = (y_hat - y_true) / len(y_true)
-        dW_out = a_last.T @ dz_last
-        db_out = dz_last.mean(axis=0, keepdims=True)
-        dA_prev = dz_last @ self.out_W.T
-        # backprop przez ukryte warstwy - cofanie błędu przez kolejne warstwy w odwrotnej kolejności
-        grads = []
+        a_last, _ = self._cache # pobranie z cache aktywacji przed warstwą wyjściową
+        dz_last = (y_hat - y_true) / len(y_true) # pochodna funkcji kosztu względem "z" dla warstwy wyjściowej
+        dW_out = a_last.T @ dz_last # gradient wag wyjściowych
+        db_out = dz_last.mean(axis=0, keepdims=True) # gradient biasu wag wyjściowych
+        dA_prev = dz_last @ self.out_W.T # gradient aktywacji ostatniej ukrytej warstwy
+        grads = [] # lista do przechowywania gradientów każdej ukrytej warstwy
+
+        # Cofamy się przez każdą ukrytą warstwę, obliczamy gradienty, zapisujemy je
         for layer in reversed(self.layers):
             dA_prev, dW, db = layer.backward(dA_prev)
             grads.append((layer, dW, db))
-        # aktualizacja wag
+
+        # Aktualizacja wag i biasów warstwy wyjściowej
         self.out_W -= self.lr * dW_out
         self.out_b -= self.lr * db_out
+
+        # Aktualizacja wag i biasów każdej warstwy ukrytej
         for layer, dW, db in grads:
             layer.W -= self.lr * dW
             layer.b -= self.lr * db
 
-    # pętla treningowa jednej sieci
+    """
+    Funkcja treningowa sieci na zbiorze X_train, y_train
+    
+    epochs: liczba epok, czyli ile razy model ma przejść przez cały zbiór danych treningowych
+    Im więcej epok tym dłuższe uczenie. Daje to możliwość modelowi na stopniowe poprawianie
+    wag na podstawie błędów. Za pierwszym razem model uczy się bardzo ogólnie. W kolejnych
+    epkach poprawia swoje przewidywania, bo widzi te same dane w innej kolejności, z innymi wagami.
+    Jednakże, za duża ilość epok może przeuczyć model, czyli zapamięta dane zamiast się ich nauczyć.
+    
+    batch_size: liczba przykładów, które model przetwarza na raz podczas jednej aktualizacj wag. Zamiast
+    przetwarzać cały X_train naraz, model dzieli dane na mini-batche. Taki podział przyśpiesza i stablizuje uczenie.
+    """
     def fit(self, X_train, y_train, epochs: int, batch_size: int):
         n = len(X_train)
         for _ in range(epochs):
