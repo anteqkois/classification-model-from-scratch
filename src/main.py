@@ -1,23 +1,10 @@
-"""
-Użycie tego skryptu jest możliwe na 3 sposoby:
-
-1. Jeśli chcemy modifykować parametry w komendzie wywoływana jest ona w taki sposób:
-
-python3 src/main.py --file src/data/wine-quality-red.csv --threshold 6 --test_size 0.2 --hidden_layers 2 --hidden_units 32 --activation relu --lr 0.01 --batch 32 --epochs 50
-
-2. W przypadku chęci testu różnych hiperparametrów ustawionych w skrypcie wywołujemy skrypt w ten sposób:
-python3 src/main.py --file src/data/wine-quality-red.csv --experiments
-
-3.
-
-"""
-
+# Biblioteki potrzebne do wywołania skryptu
 import argparse
 import csv
 import math
 from pathlib import Path
 from time import perf_counter
-
+import sys
 import numpy as np
 import pandas as pd
 
@@ -335,7 +322,7 @@ def run_experiments(X_train, X_test, y_train, y_test,
 
     # Stworzenie folderu na wyniki, jeśli takowy istnieje to nie tworzony jest nowy
     out_dir = Path("src/results")
-    out_dir.mkdir(exist_ok=True)
+    out_dir.mkdir(parents = True, exist_ok=True)
 
     """
     Potrzebujemy jednego punktu odniesienia (baseline), od którego będziemy odchylać tylko jeden hiperparametr naraz.
@@ -419,9 +406,40 @@ def load_dataset(path: str, threshold: int = 6):
     y = (df["quality"] >= threshold).astype(int).values.reshape(-1, 1)
     return X, y
 
+            ### MODEL SKLEARN ###
+def run_sklearn_model(X_train, X_test, y_train, y_test, args):
+    from sklearn.neural_network import MLPClassifier
+    from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+
+    print("\n Porównanie z modelem scikit-learn (MLPClassifier)")
+
+    # Tworzymy klasyfikator z taką samą konfiguracją jak ustawiona w main
+    skl_model = MLPClassifier(
+        hidden_layer_sizes=(args.hidden_units,) * args.hidden_layers, # np. 2 warstwy ukryte, każda z 32 neuronami
+        activation=args.activation,
+        learning_rate_init=args.lr,
+        max_iter=args.epochs,
+        batch_size=args.batch,
+        solver="sgd",
+        random_state=42,
+    )
+
+    skl_model.fit(X_train, y_train.ravel())
+    y_pred = skl_model.predict(X_test)
+
+    acc = accuracy_score(y_test, y_pred)
+    prec = precision_score(y_test, y_pred)
+    rec = recall_score(y_test, y_pred)
+    f1 = f1_score(y_test, y_pred)
+
+    print(f"Accuracy  : {acc:.3f}")
+    print(f"Precision : {prec:.3f}")
+    print(f"Recall    : {rec:.3f}")
+    print(f"F1-score  : {f1:.3f}")
+
             ### PARSER ARGUMENTÓW ###
 """
-Funkcja parse_args, która zraca obiekt z argumentami wiersza poleceń args.
+Funkcja parse_args, która zwraca obiekt z argumentami wiersza poleceń args.
 """
 
 def parse_args():
@@ -439,9 +457,9 @@ def parse_args():
     p.add_argument("--experiments", action="store_true", help="Uruchom siatkę eksperymentów")
     return p.parse_args()
 
-# MAIN
-def main():
-    args = parse_args() # pobranie argumentu z wiersza poleceń i przypisanie do zmiennej args
+            ### MAIN ###
+def main(args):
+    #args = parse_args() # pobranie argumentu z wiersza poleceń i przypisanie do zmiennej args
     print("\nWczytywanie danych")
     X, y = load_dataset(args.file, threshold=args.threshold) # wczytanie danych X i etykiet y, stosując próg jakości treshold
     print(f"Dane: {X.shape[0]} próbek, {X.shape[1]} cech")
@@ -466,11 +484,27 @@ def main():
         )
         start = perf_counter()
         model.fit(X_train, y_train, epochs=args.epochs, batch_size=args.batch)
-        dur = perf_counter() - start # czas trwania trenigu
+        dur = perf_counter() - start # czas trwania treningu
         train_acc = accuracy(y_train, model.predict_proba(X_train)) # obliczamy dokładność dla zbioru treningowego
         test_acc = accuracy(y_test, model.predict_proba(X_test)) # obliczamy dokładność dla zbioru testowego
         prec, rec, f1 = precision_recall_f1(y_test, model.predict_proba(X_test))# liczymy inne metryki dla zbioru treningowego i testowego
         print(f"\nCzas uczenia: {dur:.1f} s | train_acc = {train_acc:.3f} | test_acc={test_acc:.3f} | prec={prec:.3f} | rec={rec:.3f} | F1={f1:.3f}")
+        run_sklearn_model(X_train, X_test, y_train, y_test, args)
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1:
+        args = parse_args()
+    else:
+        class Args:
+            file = "/Users/filipekmac/Documents/GitHub/classification-model-from-scratch/src/data/wine-quality-red.csv"
+            threshold = 6
+            test_size = 0.2
+            hidden_layers = 2
+            hidden_units = 32
+            activation = "relu"
+            lr = 0.01
+            batch = 32
+            epochs = 50
+            experiments = False
+        args = Args()
+    main(args)
