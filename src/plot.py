@@ -6,41 +6,52 @@ import os
 params = ["activation", "batch_size", "learning_rate", "num_layers", "num_neurons"]
 
 # Ścieżka do plików CSV
-input_folder = "/Users/filipekmac/Documents/GitHub/classification-model-from-scratch/src/results"  # folder z plikami CSV
-output_folder = "/Users/filipekmac/Documents/GitHub/classification-model-from-scratch/src/plots"  # folder do zapisu wykresów
+input_folder = "/Users/filipekmac/Documents/GitHub/classification-model-from-scratch/src/results"
+output_folder = "/Users/filipekmac/Documents/GitHub/classification-model-from-scratch/src/plots"
 
 # Utwórz folder, jeśli nie istnieje
 os.makedirs(output_folder, exist_ok=True)
 
-# Funkcja do rysowania wykresów
-def plot_metric(df, param_name, metric_col, title_prefix, ylabel, best_col=None):
+def plot_accuracy(df, param_name):
     plt.figure(figsize=(10, 6))
-
     x = range(len(df))
-    y = df[metric_col].values
-    values = df["value"].astype(str)
+    labels = df["value"].astype(str)
 
-    if best_col == "train_best":
-        legends = [f"{v} (train_best={round(b,3)})" for v, b in zip(values, df["train_best"])]
-    elif best_col == "test_best":
-        legends = [f"{v} (test_best={round(b,3)})" for v, b in zip(values, df["test_best"])]
-    else:
-        legends = values
+    # Wykres train/test mean
+    plt.plot(x, df["train_mean"], marker='o', label=f"Train (best={df['train_best'].max():.3f})")
+    plt.plot(x, df["test_mean"], marker='o', label=f"Test (best={df['test_best'].max():.3f})")
 
-    for i in range(len(df)):
-        plt.plot(x[i], y[i], 'o', markersize=8, label=legends[i])
-    plt.plot(x, y, linestyle='-', color='gray', alpha=0.5)
-
-    plt.title(f"{title_prefix} - {param_name}")
+    plt.title(f"Accuracy - {param_name}")
     plt.xlabel("Wartości parametru")
-    plt.ylabel(ylabel)
-    plt.xticks(ticks=x, labels=values)
+    plt.ylabel("Accuracy")
+    plt.xticks(ticks=x, labels=labels)
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
 
-    # Zapisz wykres
-    plot_filename = f"{param_name}_{metric_col}.png"
+    plot_filename = f"{param_name}_accuracy_combined.png"
+    plt.savefig(os.path.join(output_folder, plot_filename))
+    plt.show()
+
+def plot_metrics(df, param_name):
+    plt.figure(figsize=(10, 6))
+    x = range(len(df))
+    labels = df["value"].astype(str)
+
+    # Wykres prec, rec, f1
+    plt.plot(x, df["prec_mean"], marker='o', label="Precision")
+    plt.plot(x, df["rec_mean"], marker='o', label="Recall")
+    plt.plot(x, df["f1_mean"], marker='o', label="F1-score")
+
+    plt.title(f"Precision / Recall / F1 - {param_name}")
+    plt.xlabel("Wartości parametru")
+    plt.ylabel("Wartości metryk")
+    plt.xticks(ticks=x, labels=labels)
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+
+    plot_filename = f"{param_name}_metrics_combined.png"
     plt.savefig(os.path.join(output_folder, plot_filename))
     plt.show()
 
@@ -54,8 +65,5 @@ for param in params:
         print(f"Plik {file_path} nie został znaleziony.")
         continue
 
-    plot_metric(df, param, "train_mean", "Train Accuracy", "Accuracy", best_col="train_best")
-    plot_metric(df, param, "test_mean", "Test Accuracy", "Accuracy", best_col="test_best")
-
-    for metric_col, title in zip(["prec_mean", "rec_mean", "f1_mean"], ["Precision", "Recall", "F1-score"]):
-        plot_metric(df, param, metric_col, title, title, best_col=None)
+    plot_accuracy(df, param)
+    plot_metrics(df, param)

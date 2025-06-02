@@ -44,7 +44,6 @@ Pomaga unikać problemu zanikania gradientów, w przeciwieństwie np. do sigmoid
 Wadą jest problem martwych neuronów, gdy x jest mniejsze od 0 gradient = 0.
 
 Problem zanikania gradientów pojawia się właśnie w głębokich sieciach neuronowych (z wieloma warstwami), podczas propogacji wstecznej, gdyż pochodne są mnożone wzdłuż warstw. 
-Jeśli używamy funkcji aktywacji, które mają pochodne bliskie 0 (np. sigmoid czy tanh w skrajnych wartościach ok. 3), to możemy zauważyć taką zależność:
 Im głębiej w sieci -> tym mniejsze gradienty -> gradienty zanikają -> wagi nie uczą się.
 Efektem jest, że wczesne warstwy uczą się bardzo wolno, albo w ogóle, a wtedy sieć się nie poprawia.
 """
@@ -54,9 +53,9 @@ def relu(x: np.ndarray) -> np.ndarray:
 
 """
 Pochodna ReLU - wynosi 1 tam, gdzie x > 0, w przeciwnym razie 0.
-Potrzebna podczas wstecznej propagacji (backpropagation - sieć uczy się na podstawie błędu loss, czyli różnicy między predykcją a etykietą 
+Potrzebna podczas wstecznej propagacji (backpropagation - sieć uczy się na podstawie błędu loss, czyli różnicy między predykcją a etykietą
 i zmienia swoje wagi aby poprawić wynik) w procesie treningu. Pochodna mówi, w którą stronę i jak mocno zmieniać wagę, żeby zmiejszyć błąd sieci.
-Jeśli pochodna ~ 1, to zmiana jest duzą i nauka jest szybka, jednak gdy ~0 uczenie staje i mamy doczynienia z zanikaniem gradientów. 
+Jeśli pochodna ~ 1, to zmiana jest duża i nauka jest szybka, jednak gdy ~0 uczenie staje i mamy do czynienia z zanikaniem gradientów. 
 Dzięki pochodnej ReLU wynoszącej 1 gradienty nie maleją.
 """
 
@@ -66,7 +65,7 @@ def relu_deriv(x: np.ndarray) -> np.ndarray:
 """
 Tanh (skalowana hiperboliczna tangens) -  przyjmuje wartości od (-1,1).
 Symetryczna wokół zera – pomaga, gdy dane wejściowe są również znormalizowane do zera (czyli po Z-score standaryzacji).
-Jendak tanh cierpi na problem zanikających gradientów, w szczególności dla dużych |x|. 
+Jednak tanh cierpi na problem zanikających gradientów, w szczególności dla dużych |x|. 
 Dobrze sprawdzi się w sieciach z małą liczbą warstw.
 """
 
@@ -108,7 +107,7 @@ class DenseLayer:
     """
 
     def __init__(self, input_size: int, output_size: int, activation: str):
-        limit = 1 / math.sqrt(input_size) # limit dla losoanie wag, żeby zapobiegać zanikaniu gradientów
+        limit = 1 / math.sqrt(input_size) # limit dla losowania wag, żeby zapobiegać zanikaniu gradientów
         rng = np.random.default_rng()
         self.W = rng.uniform(-limit, limit, (input_size, output_size)) # wagi W to macierz input_size * output_size, inicjalizowana z zakresu [-limit, imit]
         self.b = np.zeros((1, output_size)) # biasy "b" wektory długości output_size
@@ -173,7 +172,7 @@ class MLP:
         self.lr = learning_rate
 
     """
-    Funkcja wykonująca przejście sygnału przez całą sięc dla danych wejściowych X.
+    Funkcja wykonująca przejście sygnału przez całą sieć dla danych wejściowych X.
     """
 
     def forward(self, X: np.ndarray):
@@ -198,7 +197,7 @@ class MLP:
         return -np.mean(y_true * np.log(y_hat + eps) + (1 - y_true) * np.log(1 - y_hat + eps))
 
     """
-    Funkcja propoagacji wstecznej wywoływana w celu obliczenia gradientów i aktualizacji wag.
+    Funkcja propagacji wstecznej wywoływana w celu obliczenia gradientów i aktualizacji wag.
     """
 
     def backward(self, y_hat: np.ndarray, y_true: np.ndarray):
@@ -229,7 +228,7 @@ class MLP:
     epochs: liczba epok, czyli ile razy model ma przejść przez cały zbiór danych treningowych
     Im więcej epok tym dłuższe uczenie. Daje to możliwość modelowi na stopniowe poprawianie
     wag na podstawie błędów. Za pierwszym razem model uczy się bardzo ogólnie. W kolejnych
-    epkach poprawia swoje przewidywania, bo widzi te same dane w innej kolejności, z innymi wagami.
+    epokach poprawia swoje przewidywania, bo widzi te same dane w innej kolejności, z innymi wagami.
     Jednakże, za duża ilość epok może przeuczyć model, czyli zapamięta dane zamiast się ich nauczyć.
     
     batch_size: liczba przykładów, które model przetwarza na raz podczas jednej aktualizacj wag. Zamiast
@@ -316,7 +315,7 @@ def run_experiments(X_train, X_test, y_train, y_test,
         "num_layers":   [1, 2, 3, 4],
         "num_neurons":  [8, 16, 32, 64],
         "learning_rate": [0.1, 0.05, 0.01, 0.005],
-        "activation":   ["relu", "tanh", "sigmoid"],
+        "activation":   ["tanh", "relu", "sigmoid"],
         "batch_size":   [16, 32, 64, 128],
     }
 
@@ -499,11 +498,11 @@ if __name__ == "__main__":
             file = "/Users/filipekmac/Documents/GitHub/classification-model-from-scratch/src/data/wine-quality-red.csv"
             threshold = 6
             test_size = 0.2
-            hidden_layers = 2
+            hidden_layers = 3
             hidden_units = 32
-            activation = "relu"
-            lr = 0.01
-            batch = 32
+            activation = "tanh"
+            lr = 0.1
+            batch = 16
             epochs = 50
             experiments = False
         args = Args()
