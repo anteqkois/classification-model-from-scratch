@@ -1,5 +1,16 @@
-#  UŻYCIE (terminal):
-#  python3 src/main.py --file src/data/wine-quality-red.csv --threshold 6 --test_size 0.2 --hidden_layers 2 --hidden_units 32 --activation relu --lr 0.01 --batch 32 --epochs 50 --experiments
+"""
+Użycie tego skryptu jest możliwe na 3 sposoby:
+
+1. Jeśli chcemy modifykować parametry w komendzie wywoływana jest ona w taki sposób:
+
+python3 src/main.py --file src/data/wine-quality-red.csv --threshold 6 --test_size 0.2 --hidden_layers 2 --hidden_units 32 --activation relu --lr 0.01 --batch 32 --epochs 50
+
+2. W przypadku chęci testu różnych hiperparametrów ustawionych w skrypcie wywołujemy skrypt w ten sposób:
+python3 src/main.py --file src/data/wine-quality-red.csv --experiments
+
+3.
+
+"""
 
 import argparse
 import csv
@@ -84,6 +95,7 @@ Sigmoid - mapuje liczby rzeczywiste na zakres (0, 1)
 Idealna na warstwę wyjściową binarnej klasyfikacji, którą my tu zastosowaliśmy.
 Charakteryzuje się „spłaszczonymi” końcami, co przy dużych |x| może powodować zanik gradientu (dlatego w ukrytych warstwach częściej używa się ReLU/tanh).
 """
+
 def sigmoid(x: np.ndarray) -> np.ndarray:
     return 1 / (1 + np.exp(-x))
 
@@ -92,7 +104,7 @@ def sigmoid_deriv(x: np.ndarray) -> np.ndarray:
     s = sigmoid(x)
     return s * (1 - s)
 
-# słownik, który pozwala nam łatwy wybór aktywacji po nazwie
+# Słownik, który pozwala nam łatwy wybór aktywacji po nazwie
 ACTIVATIONS = {
     "relu": (relu, relu_deriv),
     "tanh": (tanh, tanh_deriv),
@@ -101,6 +113,7 @@ ACTIVATIONS = {
 
             ### DEFINICJA WARSTWY GĘSTEJ ###
 class DenseLayer:
+
     """Inicjalizacja - budowa warstwy (wymyślenie wag, ustawianie biasów oraz funkcji aktywacji).
     input_size: ile neuronów ma wejście
     output_size: ile neuronów będzie miała ta warstwa
@@ -144,6 +157,7 @@ class DenseLayer:
 
             ### STRUKTURA CAŁEJ SIECI ###
 class MLP:
+
     """
     To jest prosty model sieci neuronowej (MLP - Multilayer Perceptron) do binarnej klasyfikacji (kilka warst Dense + 1 neuron wyjściowy).
     Oznacza to, że uczy się przewidywać, czy coś należy do jednej z dwóch klas, w tym przypadku “0” czy “1”.
@@ -153,6 +167,7 @@ class MLP:
 	activation: funkcja aktywacji
 	learning_rate: tempo uczenia (krok aktualizacji wagi)
     """
+
     def __init__(self, input_dim: int, num_layers: int, num_neurons: int,
                  activation: str, learning_rate: float):
         self.layers: list[DenseLayer] = [] # tworzymy pustą listę wartsw ukrytych
@@ -173,6 +188,7 @@ class MLP:
     """
     Funkcja wykonująca przejście sygnału przez całą sięc dla danych wejściowych X.
     """
+
     def forward(self, X: np.ndarray):
         a = X # aktualna aktywacja, początkowa równa wejściu X
 
@@ -187,6 +203,7 @@ class MLP:
     """
     Loss function - jej celem jest zmierzenie, jak bardzo przewidywania sieci różnią się od prawdziwych odpowiedzi.
     """
+
     def compute_loss(self, y_hat: np.ndarray, y_true: np.ndarray):
         eps = 1e-8                        # zapobiega log(0) oraz dzieleniu przez 0
 
@@ -196,6 +213,7 @@ class MLP:
     """
     Funkcja propoagacji wstecznej wywoływana w celu obliczenia gradientów i aktualizacji wag.
     """
+
     def backward(self, y_hat: np.ndarray, y_true: np.ndarray):
         a_last, _ = self._cache # pobranie z cache aktywacji przed warstwą wyjściową
         dz_last = (y_hat - y_true) / len(y_true) # pochodna funkcji kosztu względem "z" dla warstwy wyjściowej
@@ -230,6 +248,7 @@ class MLP:
     batch_size: liczba przykładów, które model przetwarza na raz podczas jednej aktualizacj wag. Zamiast
     przetwarzać cały X_train naraz, model dzieli dane na mini-batche. Taki podział przyśpiesza i stablizuje uczenie.
     """
+
     def fit(self, X_train, y_train, epochs: int, batch_size: int):
         n = len(X_train) # liczba próbek treningowych
 
@@ -239,6 +258,7 @@ class MLP:
         To wprowadza stronniczość w początkowych aktualizacjach gradientu. Dzięki mieszaniu sieć nie może „nauczyć się” 
         sekwencji próbek, bo w każdym przejściu dostaje je w innej kolejności.
         """
+
         for _ in range(epochs):
             idx = np.random.permutation(n)
             X_train, y_train = X_train[idx], y_train[idx]
@@ -255,6 +275,7 @@ class MLP:
     """
     Zwraca przewidywane prawdopodobieństwo klasy 1 dla podanych danych X.
     """
+
     def predict_proba(self, X: np.ndarray):
         return self.forward(X)
 
@@ -267,6 +288,7 @@ y_true: prawdziwe etykiety klasy (dane referencyjne, znane odpowiedzi)
 y_pred_prob: przewidywane prawdopodobieństwo, wychodzi z funkcji sigmoid
 thr: próg decyzyjny, jakiego minimalnego prawdopodobieństwa trzeba, by uznać, że to klasa 1
 """
+
 def accuracy(y_true: np.ndarray, y_pred_prob: np.ndarray, thr: float = 0.5):
     y_pred = (y_pred_prob >= thr).astype(int) #progowane prawodopobieństwa thr = 0.5 oraz zamiana True/False na 1/0
     return (y_pred == y_true).mean() #sprawdza ile predykcji było poprawnych i zwraca średnią = procent trafień
@@ -295,8 +317,10 @@ def precision_recall_f1(y_true: np.ndarray, y_pred_prob: np.ndarray, thr=0.5):
 
             ###  GŁÓWNA PĘTLA ###
 """
+Funkcja przyjmuje zarówno dane treningowe i testowe
 repeats: liczba powtórzeń treningu dla jednego zestawu hiperparametrów
 """
+
 def run_experiments(X_train, X_test, y_train, y_test,
                     repeats: int = 5, epochs: int = 50):
 
@@ -319,6 +343,7 @@ def run_experiments(X_train, X_test, y_train, y_test,
 	PARAM_GRID.items() zwraca pary (nazwa_parametru, lista_wartości), gdzie k to nazwa parametru (np. 'num_layers'), a v[1] to drugi element listy wartości (indeks 1).
 	Dzięki temu baseline nie leży na żadnym z krańców skali, co ułatwia późniejsze porównania.
     """
+
     BASELINE = {k: v[1] for k, v in PARAM_GRID.items()}
 
     # Pętla po wszystkich nazwach hiperparametrów (param) i odpowiadających im listach wartości (values)
@@ -327,10 +352,13 @@ def run_experiments(X_train, X_test, y_train, y_test,
 
         # Pętla po każej wartości v danegi hiperametru param
         for v in values:
-            cfg = BASELINE.copy(); cfg[param] = v      # tutaj wprowadzamy jedną zmianę parametru naraz w każdej iteracji, tak jak było to wspomniane wyżej
-            tr_acc, te_acc, prec_list, recall_list, f1_list = [], [], [], [], []
-            # powtarzamy trenowanie, by uśrednić losowość
+            cfg = BASELINE.copy(); cfg[param] = v      # stworzenie kopii BASELINE i zmieniamy tylko jeden parametr a wartość v
+            tr_acc, te_acc, prec_list, recall_list, f1_list = [], [], [], [], [] # pusta lista na wyniki metryk
+
+            # Powtarzamy trenowanie, by uśrednić wpływ losowości
             for _ in range(repeats):
+
+                # Tworzona jest instancja modelu sieci neuronowej z odpowiednią konfiguracją hiperparametrów
                 model = MLP(
                     input_dim=X_train.shape[1],
                     num_layers=cfg["num_layers"],
@@ -338,13 +366,17 @@ def run_experiments(X_train, X_test, y_train, y_test,
                     activation=cfg["activation"],
                     learning_rate=cfg["learning_rate"],
                 )
-                model.fit(X_train, y_train, epochs=epochs, batch_size=cfg["batch_size"])
-                tr_acc.append(accuracy(y_train, model.predict_proba(X_train)))
-                te_acc.append(accuracy(y_test, model.predict_proba(X_test)))
+                model.fit(X_train, y_train, epochs=epochs, batch_size=cfg["batch_size"]) # trenowanie modelu na zbiorze treningowym
+                tr_acc.append(accuracy(y_train, model.predict_proba(X_train))) # liczona dokładność na zbiorze treningowym oraz zapisanie w liście
+                te_acc.append(accuracy(y_test, model.predict_proba(X_test))) # liczona dokładność na zbiorze testowym oraz zapisanie w liście
+
+                # Liczenie innych metryk na zbiorze testowym oraz zapisanie w listach
                 p, r, f = precision_recall_f1(y_test, model.predict_proba(X_test))
                 prec_list.append(p)
                 recall_list.append(r)
                 f1_list.append(f)
+
+            # Tworzony jest słownik row z uśrednionymi metrykami dla danej wartości hiperparametru
             row = {
                 "value": v,
                 "train_mean": np.mean(tr_acc),
@@ -355,9 +387,11 @@ def run_experiments(X_train, X_test, y_train, y_test,
                 "rec_mean":  np.mean(recall_list),
                 "f1_mean":   np.mean(f1_list),
             }
-            rows.append(row)
+            rows.append(row) # Dodajemy row do listy rows
             print(f"  {param} = {v:<8} | test_mean = {row['test_mean']:.3f}")
-        csv_path = out_dir / f"results_{param}.csv"
+        csv_path = out_dir / f"results_{param}.csv" # tworzona jest ścieżka do pliku CSV, w którym zapiszemy wyniki dla danego hiperparametru
+
+        # Otwierany jest plik CSV, nagłówki tworzone są na podstawie kluczy z row, wartości natomiast z rows
         with csv_path.open("w", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=rows[0].keys())
             writer.writeheader()
@@ -365,17 +399,33 @@ def run_experiments(X_train, X_test, y_train, y_test,
         print(f"Zapisano wyniki dla  parametru '{param}' do {csv_path}")
 
             ### ŁADOWANIE DANYCH ###
+"""
+Funkcja ładująca dane oraz określająca próg klasyfikacji, następnie tworzone są 
+wektory X oraz y
+path: ścieżka do pliku CSV
+threshold: 6, próg do binarnej klasyfikacji jakości
+"""
+
 def load_dataset(path: str, threshold: int = 6):
-    """Wczytujemy plik CSV oraz binaryzujemy etykietę quality ≥ threshold, tak żeby mieć potem 0/1 zmienną."""
-    df = pd.read_csv(path, sep=",")
-    df = pd.get_dummies(df, columns=["type"], drop_first=True) # przekształcamy także zmienną 'type'
+    df = pd.read_csv(path, sep=",") #wczytanie pliku csv, przecinek jest separatorem
+    df = pd.get_dummies(df, columns=["type"], drop_first=True) # przekształcamy także zmienną 'type' na 1/0
+
+    # Tworzona jest macierz cech X, usuwana jest kolumna quality (etykieta) bo jest to zmienna docelowa,
+    # .values daje macierz NumPy
     X = df.drop(columns=["quality"]).values.astype(np.float32)
+
+    # Tworzony jest wektor etykiet y, porównanie z progiem klasyfikacji oraz zamiana na 1/0
+    # .values to konwersja do tablicy NumPy i .reshape zmienia kształt to kolumnowego wektora
     y = (df["quality"] >= threshold).astype(int).values.reshape(-1, 1)
     return X, y
 
-# PARSER ARGUMENTÓW
+            ### PARSER ARGUMENTÓW ###
+"""
+Funkcja parse_args, która zraca obiekt z argumentami wiersza poleceń args.
+"""
+
 def parse_args():
-    p = argparse.ArgumentParser()
+    p = argparse.ArgumentParser() # tworzymy parser argumentów
     p.add_argument("--file", required=True, help="Ścieżka do pliku CSV z danymi")
     p.add_argument("--threshold", type=int, default=6, help="Próg jakości dla klasy 1")
     p.add_argument("--test_size", type=float, default=0.2, help="Ułamek danych testowych")
@@ -391,18 +441,21 @@ def parse_args():
 
 # MAIN
 def main():
-    args = parse_args()
+    args = parse_args() # pobranie argumentu z wiersza poleceń i przypisanie do zmiennej args
     print("\nWczytywanie danych")
-    X, y = load_dataset(args.file, threshold=args.threshold)
+    X, y = load_dataset(args.file, threshold=args.threshold) # wczytanie danych X i etykiet y, stosując próg jakości treshold
     print(f"Dane: {X.shape[0]} próbek, {X.shape[1]} cech")
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=args.test_size)
-    X_train, X_test = standard_scale(X_train, X_test)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=args.test_size) #dzielenie danych zgodnie z parametrem --test_size
+    X_train, X_test = standard_scale(X_train, X_test) #standaryzacja danych
     print(f"Podział danych: Treningowe: {len(X_train)} | Testowe: {len(X_test)}")
 
+    # jeśli podano flagę experiments to wykonujemy eksperymenty
     if args.experiments:
-        start = perf_counter()
+        start = perf_counter() # czas rozpoczęcia
         run_experiments(X_train, X_test, y_train, y_test, repeats=5, epochs=args.epochs)
         print(f"Cały proces eksperymentów zajął {perf_counter()-start:.1f} sekund")
+
+    # jeśli nie podano tej flagi, trenujemy pojedynczy model
     else:
         model = MLP(
             input_dim=X_train.shape[1],
@@ -413,10 +466,10 @@ def main():
         )
         start = perf_counter()
         model.fit(X_train, y_train, epochs=args.epochs, batch_size=args.batch)
-        dur = perf_counter() - start
-        train_acc = accuracy(y_train, model.predict_proba(X_train))
-        test_acc = accuracy(y_test, model.predict_proba(X_test))
-        prec, rec, f1 = precision_recall_f1(y_test, model.predict_proba(X_test))
+        dur = perf_counter() - start # czas trwania trenigu
+        train_acc = accuracy(y_train, model.predict_proba(X_train)) # obliczamy dokładność dla zbioru treningowego
+        test_acc = accuracy(y_test, model.predict_proba(X_test)) # obliczamy dokładność dla zbioru testowego
+        prec, rec, f1 = precision_recall_f1(y_test, model.predict_proba(X_test))# liczymy inne metryki dla zbioru treningowego i testowego
         print(f"\nCzas uczenia: {dur:.1f} s | train_acc = {train_acc:.3f} | test_acc={test_acc:.3f} | prec={prec:.3f} | rec={rec:.3f} | F1={f1:.3f}")
 
 if __name__ == "__main__":
