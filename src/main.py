@@ -28,12 +28,12 @@ standard_scale() - wykonuje standaryzację cech (kolumn) metodą Z‑score, czyl
 	•	średnią (mean) = 0
 	•	odchylenie standardowe (std) = 1
 Wykonujemy ją tylko na zbiorze uczącym tak aby model nie uczył się na informacjach, których jeszcze nie zna. 
-Standaryzacja jest potrzebna aby cechy były porównywalne (cechy o większych wartościach mogłby dominować nad innymi).
+Standaryzacja jest potrzebna aby cechy były porównywalne (cechy o większych wartościach mogłyby dominować nad innymi).
 """
 
 def standard_scale(X_train: np.ndarray, X_test: np.ndarray):
         mean = X_train.mean(axis=0) #obliczana jest średnia wartość dla każdej cechy (kolumny) osobno
-        std = X_train.std(axis=0) + 1e-8 #obliczane jest odchylenie standardowe również dla każdej cechy osobny ale dodajemy małą stałą, by uniknąć dzielenia przez 0 (gdy cecha ma stałą wartość)
+        std = X_train.std(axis=0) + 1e-8 #obliczane jest odchylenie standardowe również dla każdej cechy osobno, ale dodajemy małą stałą, by uniknąć dzielenia przez 0 (gdy cecha ma stałą wartość)
         return (X_train - mean) / std, (X_test - mean) / std #liczony jest Z-score
 
             ### FUNKCJE AKTYWACJI ###
@@ -43,7 +43,7 @@ Wprowadza nieliniowość, co umożliwia sieci rozpoznawać złożone wzorce. Jes
 Pomaga unikać problemu zanikania gradientów, w przeciwieństwie np. do sigmoidy. Działa dobrze w praktyce, szczególnie w głębszych sieciach.
 Wadą jest problem martwych neuronów, gdy x jest mniejsze od 0 gradient = 0.
 
-Problem zanikania gradientów pojawia się właśnie w głębokich sieciach neuronowych (z wieloma warstwami), podczas propogacji wstecznej, gdyż pochodne są mnożone wzdłuż warstw. 
+Problem zanikania gradientów pojawia się właśnie w głębokich sieciach neuronowych (z wieloma warstwami), podczas propagacji wstecznej, gdyż pochodne są mnożone wzdłuż warstw. 
 Im głębiej w sieci -> tym mniejsze gradienty -> gradienty zanikają -> wagi nie uczą się.
 Efektem jest, że wczesne warstwy uczą się bardzo wolno, albo w ogóle, a wtedy sieć się nie poprawia.
 """
@@ -54,7 +54,7 @@ def relu(x: np.ndarray) -> np.ndarray:
 """
 Pochodna ReLU - wynosi 1 tam, gdzie x > 0, w przeciwnym razie 0.
 Potrzebna podczas wstecznej propagacji (backpropagation - sieć uczy się na podstawie błędu loss, czyli różnicy między predykcją a etykietą
-i zmienia swoje wagi aby poprawić wynik) w procesie treningu. Pochodna mówi, w którą stronę i jak mocno zmieniać wagę, żeby zmiejszyć błąd sieci.
+i zmienia swoje wagi aby poprawić wynik) w procesie treningu. Pochodna mówi, w którą stronę i jak mocno zmieniać wagę, żeby zmniejszyć błąd sieci.
 Jeśli pochodna ~ 1, to zmiana jest duża i nauka jest szybka, jednak gdy ~0 uczenie staje i mamy do czynienia z zanikaniem gradientów. 
 Dzięki pochodnej ReLU wynoszącej 1 gradienty nie maleją.
 """
@@ -123,7 +123,7 @@ class DenseLayer:
     """
 
     def forward(self, a_prev: np.ndarray):
-        self.a_prev = a_prev               # zapamiętujemy wejście bo przyda się w backpropagation
+        self.a_prev = a_prev               # zapamiętujemy wejście, bo przyda się w backpropagation
         self.z = a_prev @ self.W + self.b  # mnożenie macierzy a_prev * W + bias
         return self.act(self.z)            # zwracamy wynik funkcji aktywacji - wyjście wartstwy
 
@@ -135,8 +135,8 @@ class DenseLayer:
     """
 
     def backward(self, dA: np.ndarray):
-        dz = dA * self.act_grad(self.z)    # łańcuch pochodnych: dL/dz = dL/dA * dA/dz, jak bardzo wynik z tej wartswy był winny błędu
-        dW = self.a_prev.T @ dz / len(dz) # gradient wag, mnożenie transponowanego wejśia przez uśrednione po długości dz
+        dz = dA * self.act_grad(self.z)    # łańcuch pochodnych: dL/dz = dL/dA * dA/dz, jak bardzo wynik z tej warstwy był winny błędu
+        dW = self.a_prev.T @ dz / len(dz) # gradient wag, mnożenie transponowanego wejścia przez uśrednione po długości dz
         db = dz.mean(axis=0, keepdims=True) # gradient biasu, to średnia z dz
         dA_prev = dz @ self.W.T # gradient względem wejścia a_prev, przekazywany do poprzedniej warstwy (jeśli jest)
         return dA_prev, dW, db
@@ -145,7 +145,7 @@ class DenseLayer:
 class MLP:
 
     """
-    To jest prosty model sieci neuronowej (MLP - Multilayer Perceptron) do binarnej klasyfikacji (kilka warst Dense + 1 neuron wyjściowy).
+    To jest prosty model sieci neuronowej (MLP - Multilayer Perceptron) do binarnej klasyfikacji (kilka warstw Dense + 1 neuron wyjściowy).
     Oznacza to, że uczy się przewidywać, czy coś należy do jednej z dwóch klas, w tym przypadku “0” czy “1”.
     input_dim: liczba cech wejściowych
 	num_layers: ile warstw ukrytych (czyli „neuronów pośrednich”) będzie między wejściem a wyjściem.
@@ -156,7 +156,7 @@ class MLP:
 
     def __init__(self, input_dim: int, num_layers: int, num_neurons: int,
                  activation: str, learning_rate: float):
-        self.layers: list[DenseLayer] = [] # tworzymy pustą listę wartsw ukrytych
+        self.layers: list[DenseLayer] = [] # tworzymy pustą listę warstw ukrytych
         dim_prev = input_dim # zmienna pomocnicza - aktualna liczba wejść do danej warstwy (na początku równa input_dim)
 
         # Tworzymy warstwę typu DenseLayer o odpowiednich wymiarach i aktywacji.
@@ -167,7 +167,7 @@ class MLP:
         # Pojedynczy neuron wyjściowy + sigmoid
         limit = 1 / math.sqrt(dim_prev) # limit dla inicjalizacji wag wyjściowych (zapobiega zbyt dużym wartościom)
         rng = np.random.default_rng()
-        self.out_W = rng.uniform(-limit, limit, (dim_prev, 1)) # wagi warstwy wyjściowej z zakresu (-limit, limit), rozmiar: (liczba neuronów ostaniej warstwy, 1)
+        self.out_W = rng.uniform(-limit, limit, (dim_prev, 1)) # wagi warstwy wyjściowej z zakresu (-limit, limit), rozmiar: (liczba neuronów ostatniej warstwy, 1)
         self.out_b = np.zeros((1, 1)) # bias warstwy wyjściowej jako zero
         self.lr = learning_rate
 
@@ -178,7 +178,7 @@ class MLP:
     def forward(self, X: np.ndarray):
         a = X # aktualna aktywacja, początkowa równa wejściu X
 
-        # Dla każdej warstwy ukrytej wykonujemy propagację w przód, aktualizając a
+        # Dla każdej warstwy ukrytej wykonujemy propagację w przód, aktualizując a
         for layer in self.layers:
             a = layer.forward(a)
         z = a @ self.out_W + self.out_b # liczona jest kombinacja aktywacji ostatniej warstwy z wagami wyjściowymi + bias
@@ -231,8 +231,8 @@ class MLP:
     epokach poprawia swoje przewidywania, bo widzi te same dane w innej kolejności, z innymi wagami.
     Jednakże, za duża ilość epok może przeuczyć model, czyli zapamięta dane zamiast się ich nauczyć.
     
-    batch_size: liczba przykładów, które model przetwarza na raz podczas jednej aktualizacj wag. Zamiast
-    przetwarzać cały X_train naraz, model dzieli dane na mini-batche. Taki podział przyśpiesza i stablizuje uczenie.
+    batch_size: liczba przykładów, które model przetwarza na raz podczas jednej aktualizacji wag. Zamiast
+    przetwarzać cały X_train naraz, model dzieli dane na mini-batche. Taki podział przyśpiesza i stabilizuje uczenie.
     """
 
     def fit(self, X_train, y_train, epochs: int, batch_size: int):
@@ -276,7 +276,7 @@ thr: próg decyzyjny, jakiego minimalnego prawdopodobieństwa trzeba, by uznać,
 """
 
 def accuracy(y_true: np.ndarray, y_pred_prob: np.ndarray, thr: float = 0.5):
-    y_pred = (y_pred_prob >= thr).astype(int) #progowane prawodopobieństwa thr = 0.5 oraz zamiana True/False na 1/0
+    y_pred = (y_pred_prob >= thr).astype(int) #progowane prawdopodobieństwa thr = 0.5 oraz zamiana True/False na 1/0
     return (y_pred == y_true).mean() #sprawdza ile predykcji było poprawnych i zwraca średnią = procent trafień
 
 """
@@ -310,7 +310,7 @@ repeats: liczba powtórzeń treningu dla jednego zestawu hiperparametrów
 def run_experiments(X_train, X_test, y_train, y_test,
                     repeats: int = 5, epochs: int = 50):
 
-    #Słownik, zawierający listy możliwych wartości dla każedgo hiperparametru
+    #Słownik, zawierający listy możliwych wartości dla każdego hiperparametru
     PARAM_GRID = {
         "num_layers":   [1, 2, 3, 4],
         "num_neurons":  [8, 16, 32, 64],
@@ -336,7 +336,7 @@ def run_experiments(X_train, X_test, y_train, y_test,
     for param, values in PARAM_GRID.items():
         rows = [] # pusta lista, gdzie będą trafiać wyniki dla każdej wartości danego parametru
 
-        # Pętla po każej wartości v danegi hiperametru param
+        # Pętla po każdej wartości v danego parametru param
         for v in values:
             cfg = BASELINE.copy(); cfg[param] = v      # stworzenie kopii BASELINE i zmieniamy tylko jeden parametr a wartość v
             tr_acc, te_acc, prec_list, recall_list, f1_list = [], [], [], [], [] # pusta lista na wyniki metryk
@@ -396,7 +396,7 @@ def load_dataset(path: str, threshold: int = 6):
     df = pd.read_csv(path, sep=",") #wczytanie pliku csv, przecinek jest separatorem
     df = pd.get_dummies(df, columns=["type"], drop_first=True) # przekształcamy także zmienną 'type' na 1/0
 
-    # Tworzona jest macierz cech X, usuwana jest kolumna quality (etykieta) bo jest to zmienna docelowa,
+    # Tworzona jest macierz cech X, usuwana jest kolumna quality (etykieta), bo jest to zmienna docelowa,
     # .values daje macierz NumPy
     X = df.drop(columns=["quality"]).values.astype(np.float32)
 
@@ -409,6 +409,8 @@ def load_dataset(path: str, threshold: int = 6):
 def run_sklearn_model(X_train, X_test, y_train, y_test, args):
     from sklearn.neural_network import MLPClassifier
     from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+    import warnings
+    from sklearn.exceptions import ConvergenceWarning
 
     print("\n Porównanie z modelem scikit-learn (MLPClassifier)")
 
@@ -420,10 +422,11 @@ def run_sklearn_model(X_train, X_test, y_train, y_test, args):
         max_iter=args.epochs,
         batch_size=args.batch,
         solver="sgd",
-        random_state=42,
+        random_state=42
     )
-
-    skl_model.fit(X_train, y_train.ravel())
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=ConvergenceWarning)
+        skl_model.fit(X_train, y_train.ravel())
     y_pred = skl_model.predict(X_test)
 
     acc = accuracy_score(y_test, y_pred)
@@ -462,8 +465,8 @@ def main(args):
     print("\nWczytywanie danych")
     X, y = load_dataset(args.file, threshold=args.threshold) # wczytanie danych X i etykiet y, stosując próg jakości treshold
     print(f"Dane: {X.shape[0]} próbek, {X.shape[1]} cech")
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=args.test_size) #dzielenie danych zgodnie z parametrem --test_size
-    X_train, X_test = standard_scale(X_train, X_test) #standaryzacja danych
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=args.test_size) # dzielenie danych zgodnie z parametrem --test_size
+    X_train, X_test = standard_scale(X_train, X_test) # standaryzacja danych
     print(f"Podział danych: Treningowe: {len(X_train)} | Testowe: {len(X_test)}")
 
     # jeśli podano flagę experiments to wykonujemy eksperymenty
